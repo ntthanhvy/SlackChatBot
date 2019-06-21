@@ -3,6 +3,7 @@
 Python Slack Bot class for use with the pythOnBoarding app
 """
 import os
+from re import search
 
 from slackclient import SlackClient
 
@@ -28,21 +29,30 @@ class Bot(object):
                       # can access. It's important to use the most restricted
                       # scope that your app will need.
                       "scope": "bot"}
-        self.verification = 'kRrADCUP86toKl9XhiIILJP8'
+        self.verification = 'kRrADCUP86toKl9XhiIILJP8'  # kRrADCUP86toKl9XhiIILJP8
 
         # NOTE: Python-slack requires a client connection to generate
         # an OAuth token. We can connect to the client without authenticating
         # by passing an empty string as a token and then reinstantiating the
         # client with a valid OAuth token once we have one.
-        self.client = SlackClient(
-            'xoxb-452524853910-670232814118-e7nhibVDmCuKsnMVXWm8nMgi')
-        # We'll use this dictionary to store the state of each message object.
-        # In a production environment you'll likely want to store this more
-        # persistently in  a database.
+        self.client = SlackClient('')
 
-        self.bot_id = self.client.api_call("auth.test")["user_id"]
+        self.bot_id = ''
 
-    def onboarding_message(self, event):
+    def auth(self, code):
+        auth_response = self.client.api_call(
+                                "oauth.access",
+                                client_id=self.oauth["client_id"],
+                                client_secret=self.oauth["client_secret"],
+                                code=code
+                                )
+        print(auth_response)
+        self.client = SlackClient(auth_response["bot"]["bot_access_token"])
+        self.bot_id = auth_response['bot']['bot_user_id']
+
+        self.client.api_call('chat.postMessage', channel='C0XXXXXX', text='Hello world')
+
+    def onboarding_message(self, command, result, event):
         """
         Create and send an onboarding welcome message to users's command.
 
@@ -51,69 +61,32 @@ class Bot(object):
         user_id : str
             id of the Slack user associated with the incoming event
         """
-        default_response = "I don't understand what you are saying, Try *help*"
-        print(self.bot_id)
+        # default_response = "I don't understand what you are saying, Try *help*"
+
         response = None
-        if 'hello' in event['text']:
-            response = "Hi <@" + event['user'] + '>! What can I do for you?'
 
-        if 'subtype' in event:
-            response = self.handle_subtype(event)
+        print('command', command)
 
-        else:
-            data = self.handle_input(event['text'])
-            if data:
-                response = "Error noted."
-                self.client.api_call("chat.postMessage",
-                            channel=event['channel'],
-                            icon_emoji=self.emoji,
-                            text=response or default_response
-                            )
-                return data
-            
+        if 'escalate' in command:
+            response = 'Contact info is:\n' +\
+                        'Customer: %s\n' %(result.owner_name) +\
+                        'Telephone number: %s' % (result.tel)
 
+        print(response)
+        
         self.client.api_call("chat.postMessage",
                             channel=event['channel'],
                             icon_emoji=self.emoji,
-                            text=response or default_response
+                            text=response
                             )
         
-        return None
         
-    def handle_subtype(self, event):
-        if event['subtype'] == 'channel_join':
-            id = event['user']
-            if id == self.bot_id:
-                message = "Greeting everyone! I am <@" + self.bot_id + ">."
-                return message
-            else:
-                return "Hi <@" + id + ">. Great to have you here with us."
-    
-    def handle_input(self, text):
-        inp = text.split(' ', 1)
-        
-        if inp[0].startswith('error'):
-            error = inp[1].strip().split(' ', 1)
-            return error
-
-        return None
-
     def parse_input(self, text):
-        inp = text.split(' ', 1)
-        if 'server' in inp[0]:
-            infos = inp[1].split(',')
-            data = {
-                'server_name': infos[0].strip(),
-                'ram': int(infos[1].strip()),
-                'cpu': int(infos[2].strip()),
-                'owner': [name for name in infos[-1].strip().split()]
-            }
-            return data
+        metion_regex = "^<@(|[WU].+?)>(.*)"
+        match = search(metion_regex, text)
+        print(match.groups())
+        return match.groups() if match else (None, None)
 
-    def result(self, data, event):
-        message = "Query successful with data" + str(data)
-        self.client.api_call("chat.postMessage",
-                            channel=event['channel'],
-                            icon_emoji=self.emoji,
-                            text=message
-                            )
+
+if __name__ == "__main__":
+    Bot().parse_input('<@UKQ6UPY3G> command params')
