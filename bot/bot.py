@@ -11,7 +11,7 @@ from slackclient import SlackClient
 # associated with each team, we can store this information in memory on
 # as a global object. When your bot is out of development, it's best to
 # save this in a more persistent memory store.
-authed_teams = {}
+authed_team = None
 
 
 class Bot(object):
@@ -41,16 +41,18 @@ class Bot(object):
 
     def auth(self, code):
         auth_response = self.client.api_call(
-                                "oauth.access",
-                                client_id=self.oauth["client_id"],
-                                client_secret=self.oauth["client_secret"],
-                                code=code
-                                )
+            "oauth.access",
+            client_id=self.oauth["client_id"],
+            client_secret=self.oauth["client_secret"],
+            code=code
+        )
         print(auth_response)
-        self.client = SlackClient(auth_response["bot"]["bot_access_token"])
-        self.bot_id = auth_response['bot']['bot_user_id']
-
-        self.client.api_call('chat.postMessage', channel='C0XXXXXX', text='Hello world')
+        authed_team = {"bot_token":
+                       auth_response["bot"]["bot_access_token"],
+                       'bot_id': auth_response['bot']['bot_user_id']}
+        
+        self.client = SlackClient(authed_team['bot_token'])
+        self.bot_id = authed_team['bot_id']
 
     def onboarding_message(self, command, result, event):
         """
@@ -69,23 +71,36 @@ class Bot(object):
 
         if 'escalate' in command:
             response = 'Contact info is:\n' +\
-                        'Customer: %s\n' %(result.owner_name) +\
-                        'Telephone number: %s' % (result.tel)
+                'Customer: %s\n' % (result.owner_name) +\
+                'Telephone number: %s' % (result.tel)
 
         print(response)
-        
+
+        default_response = "Unreconized command. Please try again."
+
         self.client.api_call("chat.postMessage",
-                            channel=event['channel'],
-                            icon_emoji=self.emoji,
-                            text=response
-                            )
-        
-        
+                             channel=event['channel'],
+                             icon_emoji=self.emoji,
+                             text=response or default_response
+                             )
+
     def parse_input(self, text):
         metion_regex = "^<@(|[WU].+?)>(.*)"
         match = search(metion_regex, text)
         print(match.groups())
         return match.groups() if match else (None, None)
+
+    def default_answer(self, slack_event):
+        response = None
+        if 'hello' in slack_event['text']:
+            response = 'Hi <@' + slack_event['user'] + '>! What can I do for you?'
+        else:
+            response = 'I don\'t understand'
+
+        self.client.api_call('chat.postMessage',
+                             channel=slack_event['channel'],
+                             icon_emoji=self.emoji,
+                             text=response)
 
 
 if __name__ == "__main__":

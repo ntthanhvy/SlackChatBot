@@ -33,6 +33,7 @@ def handle_command(cmd, params):
         result = add_escalate(session, data)
         contact_info = get_contact_info(session, result)
         return contact_info[0]
+    
     return None
 
 
@@ -54,13 +55,17 @@ def _event_handler(slack_event):
     if not 'subtype' in slack_event and 'app_mention' in event_type:
         user_id, text = pyBot.parse_input(slack_event['text'])
         if user_id == pyBot.bot_id:
-            command, params = text.strip().split(' ', 1)
-            result = handle_command(command, params)
-            try:
-                session.commit()
-            except AttributeError:
-                pass
-            pyBot.onboarding_message(command, result, slack_event)
+            if len(text.split()) > 1:
+                command, params = text.strip().split(' ', 1)
+                result = handle_command(command, params)
+                try:
+                    session.commit()
+                except AttributeError:
+                    pass
+                pyBot.onboarding_message(command, result, slack_event)
+            else:
+                pyBot.default_answer(slack_event)
+            
             return make_response("Event hanled", 200,)
 
     elif 'channel_join' in event_type or 'team_join' in event_type:
